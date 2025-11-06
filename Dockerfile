@@ -4,6 +4,8 @@ FROM gradle:8.9-jdk17 AS builder
 COPY . /home/app/
 WORKDIR /home/app
 
+RUN chmod +x ./gradlew \
+
 RUN ./gradlew build --no-daemon -x test
 
 # Etapa 2: Ejecución
