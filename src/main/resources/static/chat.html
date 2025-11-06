@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat en Tiempo Real</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .chat-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 600px;
+            height: 700px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .chat-header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .connection-status {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+
+        .connected { background-color: #4ade80; }
+        .disconnected { background-color: #f87171; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .login-section {
+            padding: 40px;
+            text-align: center;
+        }
+
+        .login-section input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 16px;
+            margin-bottom: 15px;
+            transition: border 0.3s;
+        }
+
+        .login-section input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .login-section button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .login-section button:hover {
+            transform: translateY(-2px);
+        }
+
+        .login-section button:active {
+            transform: translateY(0);
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f9fafb;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-sender {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .message-content {
+            background: white;
+            padding: 12px 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            word-wrap: break-word;
+        }
+
+        .message.own .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-left: auto;
+            max-width: 80%;
+        }
+
+        .message.own .message-sender {
+            text-align: right;
+        }
+
+        .message-timestamp {
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 5px;
+        }
+
+        .input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-container input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 25px;
+            font-size: 16px;
+            transition: border 0.3s;
+        }
+
+        .input-container input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .input-container button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .input-container button:hover {
+            transform: scale(1.05);
+        }
+
+        .input-container button:active {
+            transform: scale(0.95);
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>💬 Chat en Tiempo Real</h1>
+            <div class="connection-status">
+                <span class="status-dot disconnected" id="statusDot"></span>
+                <span id="statusText">Desconectado</span>
+            </div>
+        </div>
+
+        <div class="login-section" id="loginSection">
+            <h2 style="margin-bottom: 20px; color: #374151;">Ingresa tu nombre</h2>
+            <input type="text" id="usernameInput" placeholder="Escribe tu nombre..." />
+            <button onclick="connect()">Conectar al Chat</button>
+        </div>
+
+        <div class="messages-container hidden" id="messagesContainer"></div>
+
+        <div class="input-container hidden" id="inputContainer">
+            <input type="text" id="messageInput" placeholder="Escribe un mensaje..." 
+                   onkeypress="if(event.key === 'Enter') sendMessage()" />
+            <button onclick="sendMessage()">Enviar</button>
+        </div>
+    </div>
+
+    <script>
+        let stompClient = null;
+        let username = null;
+
+        function connect() {
+            username = document.getElementById('usernameInput').value.trim();
+            
+            if (!username) {
+                alert('Por favor ingresa tu nombre');
+                return;
+            }
+
+            const socket = new SockJS('http://localhost:8080/chat');
+            stompClient = Stomp.over(socket);
+
+            stompClient.connect({}, function(frame) {
+                console.log('Conectado: ' + frame);
+                
+                // Actualizar UI
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('messagesContainer').classList.remove('hidden');
+                document.getElementById('inputContainer').classList.remove('hidden');
+                document.getElementById('statusDot').className = 'status-dot connected';
+                document.getElementById('statusText').textContent = 'Conectado como ' + username;
+
+                // Suscribirse al topic de mensajes
+                stompClient.subscribe('/topic/messages', function(message) {
+                    const msg = JSON.parse(message.body);
+                    showMessage(msg);
+                });
+
+                // Mensaje de bienvenida
+                addSystemMessage(username + ' se unió al chat');
+            }, function(error) {
+                console.error('Error de conexión:', error);
+                document.getElementById('statusDot').className = 'status-dot disconnected';
+                document.getElementById('statusText').textContent = 'Error de conexión';
+                alert('No se pudo conectar al servidor. Asegúrate de que el servidor esté corriendo en http://localhost:8080');
+            });
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const content = messageInput.value.trim();
+
+            if (!content || !stompClient) {
+                return;
+            }
+
+            const message = {
+                content: content,
+                sender: username,
+                timestamp: Date.now()
+            };
+
+            stompClient.send('/app/sendMessage', {}, JSON.stringify(message));
+            messageInput.value = '';
+        }
+
+        function showMessage(message) {
+            const messagesContainer = document.getElementById('messagesContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message' + (message.sender === username ? ' own' : '');
+
+            const time = new Date(message.timestamp).toLocaleTimeString('es-ES', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            messageDiv.innerHTML = `
+                <div class="message-sender">${message.sender}</div>
+                <div class="message-content">${escapeHtml(message.content)}</div>
+                <div class="message-timestamp">${time}</div>
+            `;
+
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function addSystemMessage(text) {
+            const messagesContainer = document.getElementById('messagesContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.style.textAlign = 'center';
+            messageDiv.style.color = '#9ca3af';
+            messageDiv.style.fontSize = '14px';
+            messageDiv.style.margin = '10px 0';
+            messageDiv.textContent = text;
+            messagesContainer.appendChild(messageDiv);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Desconectar al cerrar la ventana
+        window.addEventListener('beforeunload', function() {
+            if (stompClient !== null) {
+                stompClient.disconnect();
+            }
+        });
+    </script>
+</body>
+</html>
