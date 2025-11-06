@@ -43,7 +43,7 @@ class MessageRestController(private val messageService: MessageService) {
     fun sendMessageRest(@RequestBody message: Message): ResponseEntity<Message> {
         val savedMessage = messageService.saveBlocking(message)
         return ResponseEntity.status(HttpStatus.CREATED).body(savedMessage)
-    }
+    }   
 
     @GetMapping("/count")
     fun countMessages(): ResponseEntity<Map<String, Int>> {
