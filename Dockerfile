@@ -4,8 +4,10 @@ FROM gradle:8.9-jdk17 AS builder
 COPY . /home/app/
 WORKDIR /home/app
 
-RUN chmod +x ./gradlew \
+# Dar permisos de ejecución a gradlew
+RUN chmod +x ./gradlew
 
+# Construir el JAR (sin tests)
 RUN ./gradlew build --no-daemon -x test
 
 # Etapa 2: Ejecución
